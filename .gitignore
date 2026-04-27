@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.eggs/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Large data files (download manually, see data/README.md)
+data/*.fastq
+data/*.fastq.gz
+data/*.bam
+data/*.bam.bai
+data/*.vcf
+data/*.vcf.gz
+data/*.fasta
+data/*.fa
+data/*.fa.gz
+data/*.sam
+data/*.bed
+data/*.gtf
+data/*.gff
+
+# Bioinformatics temp/working files
+*.log
+*.tmp
+*.snakemake/
+.snakemake/
+
+# macOS
+.DS_Store
+
+# Conda
+.conda/

@@ -1,0 +1,143 @@
+# =============================================================================
+# Minimal NGS pipeline with Snakemake
+# =============================================================================
+# Demonstrates a typical workflow: QC → alignment → variants
+#
+# Required input files:
+#   data/reads_R1.fastq.gz   (forward reads)
+#   data/reads_R2.fastq.gz   (reverse reads)
+#   data/reference.fa        (reference genome)
+#
+# Required tools (install with: conda install -c bioconda ...):
+#   - fastqc
+#   - bwa
+#   - samtools
+#   - bcftools
+#
+# Usage:
+#   snakemake -n                  # dry run (show plan)
+#   snakemake --cores 4           # actual execution with 4 cores
+#   snakemake --dag | dot -Tsvg > dag.svg   # visualize DAG
+# =============================================================================
+
+# Sample configuration. In a real project this would come from config.yaml
+SAMPLE = "sample1"
+
+# -----------------------------------------------------------------------------
+# Default rule: declares the final outputs we want
+# -----------------------------------------------------------------------------
+rule all:
+    input:
+        f"results/qc/{SAMPLE}_R1_fastqc.html",
+        f"results/qc/{SAMPLE}_R2_fastqc.html",
+        f"results/aligned/{SAMPLE}.sorted.bam.bai",
+        f"results/variants/{SAMPLE}.vcf.gz"
+
+
+# -----------------------------------------------------------------------------
+# 1. Quality control with FastQC
+# -----------------------------------------------------------------------------
+rule fastqc:
+    input:
+        r1 = "data/{sample}_R1.fastq.gz",
+        r2 = "data/{sample}_R2.fastq.gz"
+    output:
+        html_r1 = "results/qc/{sample}_R1_fastqc.html",
+        html_r2 = "results/qc/{sample}_R2_fastqc.html"
+    threads: 2
+    log:
+        "logs/fastqc/{sample}.log"
+    shell:
+        """
+        mkdir -p results/qc
+        fastqc -t {threads} -o results/qc {input.r1} {input.r2} &> {log}
+        """
+
+
+# -----------------------------------------------------------------------------
+# 2. Index the reference (BWA needs index files)
+# -----------------------------------------------------------------------------
+rule bwa_index:
+    input:
+        "data/reference.fa"
+    output:
+        # BWA generates 5 index files
+        "data/reference.fa.amb",
+        "data/reference.fa.ann",
+        "data/reference.fa.bwt",
+        "data/reference.fa.pac",
+        "data/reference.fa.sa"
+    log:
+        "logs/bwa_index.log"
+    shell:
+        "bwa index {input} &> {log}"
+
+
+# -----------------------------------------------------------------------------
+# 3. Alignment with BWA-MEM + sort with samtools
+# -----------------------------------------------------------------------------
+rule bwa_align:
+    input:
+        ref     = "data/reference.fa",
+        idx     = "data/reference.fa.bwt",
+        r1      = "data/{sample}_R1.fastq.gz",
+        r2      = "data/{sample}_R2.fastq.gz"
+    output:
+        bam = "results/aligned/{sample}.sorted.bam"
+    threads: 4
+    log:
+        "logs/bwa/{sample}.log"
+    shell:
+        """
+        mkdir -p results/aligned
+        bwa mem -t {threads} \\
+            -R "@RG\\tID:{wildcards.sample}\\tSM:{wildcards.sample}\\tPL:ILLUMINA" \\
+            {input.ref} {input.r1} {input.r2} 2> {log} | \\
+        samtools sort -@ {threads} -o {output.bam} -
+        """
+
+
+# -----------------------------------------------------------------------------
+# 4. Index the sorted BAM
+# -----------------------------------------------------------------------------
+rule bam_index:
+    input:
+        "results/aligned/{sample}.sorted.bam"
+    output:
+        "results/aligned/{sample}.sorted.bam.bai"
+    shell:
+        "samtools index {input}"
+
+
+# -----------------------------------------------------------------------------
+# 5. FAI index of the reference (required by bcftools)
+# -----------------------------------------------------------------------------
+rule fai_index:
+    input:
+        "data/reference.fa"
+    output:
+        "data/reference.fa.fai"
+    shell:
+        "samtools faidx {input}"
+
+
+# -----------------------------------------------------------------------------
+# 6. Variant calling with bcftools
+# -----------------------------------------------------------------------------
+rule call_variants:
+    input:
+        ref = "data/reference.fa",
+        fai = "data/reference.fa.fai",
+        bam = "results/aligned/{sample}.sorted.bam",
+        bai = "results/aligned/{sample}.sorted.bam.bai"
+    output:
+        vcf = "results/variants/{sample}.vcf.gz"
+    log:
+        "logs/variants/{sample}.log"
+    shell:
+        """
+        mkdir -p results/variants
+        bcftools mpileup -f {input.ref} {input.bam} 2> {log} | \\
+        bcftools call -mv -Oz -o {output.vcf} 2>> {log}
+        bcftools index {output.vcf}
+        """
