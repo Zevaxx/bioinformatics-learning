@@ -1,0 +1,23 @@
+name: bioinfo-learning
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.11
+  - biopython>=1.81
+  - pandas>=2.0
+  - numpy>=1.24
+  - scikit-learn>=1.3
+  - scipy>=1.11
+  - matplotlib>=3.7
+  - seaborn>=0.12
+  - jupyter
+  - jupyterlab
+  - notebook
+  - rdkit>=2023.9.1
+  - requests
+  - tqdm
+  - pip
+  - pip:
+      - pyvcf3
